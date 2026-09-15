@@ -10,6 +10,12 @@ const {
 } = require('../db/materials');
 const { markMaterialsOpened, markSubscribed } = require('../db/users');
 
+function displayLabel(material) {
+    return material.emoji
+        ? `${material.emoji} ${material.label}`
+        : material.label;
+}
+
 function musicMainMenuHandler() {
     return async (ctx) => {
         await ctx.answerCbQuery();
@@ -28,7 +34,7 @@ async function getCategoriesMenu() {
 
     const buttons = materials.map((material) =>
         Markup.button.callback(
-            `${material.emoji} ${material.label}`,
+            displayLabel(material),
             `material:${material.key}`
         )
     );
@@ -130,7 +136,7 @@ async function sendMaterial(ctx, materialKey) {
         Markup.inlineKeyboard([
             [
                 Markup.button.url(
-                    `${material.emoji} ${material.label}`,
+                    displayLabel(material),
                     material.url
                 )
             ]

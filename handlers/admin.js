@@ -73,7 +73,7 @@ function formatStats(stats, materials, materialStats) {
     } else {
         materials.forEach((material) => {
             const count = countByKey[material.key] || 0;
-            text += `${material.emoji} ${material.label} — ${count}\n`;
+            text += `${displayLabel(material)} — ${count}\n`;
         });
     }
 
@@ -89,7 +89,7 @@ function formatMaterialsMenu(materials) {
     }
 
     materials.forEach((material) => {
-        text += `${material.emoji} ${material.label}\n`;
+        text += `${displayLabel(material)}\n`;
     });
 
     return text.trim();
@@ -112,6 +112,12 @@ function formatSourceStats(rows) {
 
 function isValidUrl(url) {
     return /^https?:\/\//i.test(url);
+}
+
+function displayLabel(material) {
+    return material.emoji
+        ? `${material.emoji} ${material.label}`
+        : material.label;
 }
 
 // ---------- Главное меню админки ----------
@@ -263,7 +269,7 @@ function adminMaterialEditActionHandler() {
 
             const buttons = materials.map((material) => [
                 Markup.button.callback(
-                    `${material.emoji} ${material.label}`,
+                    displayLabel(material),
                     `admin:material_edit_pick:${material.key}`
                 ),
             ]);
@@ -303,13 +309,13 @@ function adminMaterialEditPickActionHandler() {
             materialFlow.set(ctx.from.id, { action: 'edit', key });
 
             await ctx.editMessageText(
-                `✏️ Изменение: ${material.emoji} ${material.label}\n\n` +
+                `✏️ Изменение: ${displayLabel(material)}\n\n` +
                 'Пришли новые данные через вертикальную черту:\n' +
                 'название | ссылка\n\n' +
                 'Например:\n' +
                 `${material.label} | ${material.url}\n\n` +
                 'Эмодзи необязателен — если хочешь поменять, добавь его последним пунктом:\n' +
-                `${material.label} | ${material.url} | ${material.emoji}\n\n` +
+                `${material.label} | ${material.url} | ${material.emoji || '🎬'}\n\n` +
                 'Если эмодзи не укажешь — оставлю текущий.',
                 getCancelMenu('admin:material_cancel')
             );
@@ -343,7 +349,7 @@ function adminMaterialDeleteActionHandler() {
 
             const buttons = materials.map((material) => [
                 Markup.button.callback(
-                    `${material.emoji} ${material.label}`,
+                    displayLabel(material),
                     `admin:material_delete_pick:${material.key}`
                 ),
             ]);
@@ -381,7 +387,7 @@ function adminMaterialDeletePickActionHandler() {
             await ctx.answerCbQuery();
 
             await ctx.editMessageText(
-                `Точно удалить «${material.emoji} ${material.label}»? Это нельзя отменить.`,
+                `Точно удалить «${displayLabel(material)}»? Это нельзя отменить.`,
                 Markup.inlineKeyboard([
                     [
                         Markup.button.callback(
@@ -470,7 +476,7 @@ async function handleMaterialAddMessage(ctx) {
         return;
     }
 
-    const [key, label, url, emoji = '📁'] = parts;
+    const [key, label, url, emoji = ''] = parts;
 
     if (key.includes(':') || /\s/.test(key)) {
         await ctx.reply(
@@ -495,9 +501,9 @@ async function handleMaterialAddMessage(ctx) {
     }
 
     materialFlow.delete(ctx.from.id);
-    await createMaterial({ key, emoji, label, url });
+    const created = await createMaterial({ key, emoji, label, url });
 
-    await ctx.reply(`Готово, материал «${emoji} ${label}» добавлен ✅`);
+    await ctx.reply(`Готово, материал «${displayLabel(created)}» добавлен ✅`);
 
     const materials = await getAllMaterials();
     await ctx.reply(formatMaterialsMenu(materials), getMaterialsMenu());
