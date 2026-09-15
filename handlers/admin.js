@@ -13,14 +13,6 @@ const {
 
 const ADMIN_TITLE = '⚙️ АДМИН-ПАНЕЛЬ';
 
-// Подписи материалов в блоке статистики (фиксированный порядок и эмодзи,
-// независимо от того, что сейчас лежит в таблице materials).
-const STATS_MATERIAL_LABELS = [
-    { key: 'fonts', emoji: '🔤', label: 'шрифты' },
-    { key: 'sfx', emoji: '💥', label: 'sfx' },
-    { key: 'music', emoji: '🎵', label: 'музыка' },
-];
-
 // Админы, которые сейчас должны прислать сообщение для рассылки.
 const awaitingBroadcast = new Set();
 
@@ -62,7 +54,7 @@ function getCancelMenu(callbackData) {
 
 // ---------- Форматирование ----------
 
-function formatStats(stats, materialStats) {
+function formatStats(stats, materials, materialStats) {
     const countByKey = {};
     materialStats.forEach((row) => {
         countByKey[row.material_key] = row.count;
@@ -76,10 +68,14 @@ function formatStats(stats, materialStats) {
     text += `📈 конверсия: ${stats.conversion.toFixed(1)}%\n\n`;
     text += 'материалы:\n';
 
-    STATS_MATERIAL_LABELS.forEach((item) => {
-        const count = countByKey[item.key] || 0;
-        text += `${item.emoji} ${item.label} — ${count}\n`;
-    });
+    if (materials.length === 0) {
+        text += '—';
+    } else {
+        materials.forEach((material) => {
+            const count = countByKey[material.key] || 0;
+            text += `${material.emoji} ${material.label} — ${count}\n`;
+        });
+    }
 
     return text.trim();
 }
@@ -156,10 +152,11 @@ function adminStatsActionHandler() {
             await ctx.answerCbQuery();
 
             const stats = await getStats();
+            const materials = await getAllMaterials();
             const materialStats = await getMaterialStats();
 
             await ctx.editMessageText(
-                formatStats(stats, materialStats),
+                formatStats(stats, materials, materialStats),
                 getBackMenu()
             );
         } catch (error) {
