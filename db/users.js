@@ -42,7 +42,27 @@ async function registerUser(ctx) {
     return { user, isNew: true };
 }
 
-// Шаг 5: статистика
+// Отмечает первое открытие меню материалов (для воронки в статистике).
+async function markMaterialsOpened(telegramId) {
+    await pool.query(
+        `UPDATE users
+         SET opened_materials_at = NOW()
+         WHERE telegram_id = $1 AND opened_materials_at IS NULL`,
+        [telegramId]
+    );
+}
+
+// Отмечает первый успешно подтверждённый факт подписки (для воронки).
+async function markSubscribed(telegramId) {
+    await pool.query(
+        `UPDATE users
+         SET subscribed_at = NOW()
+         WHERE telegram_id = $1 AND subscribed_at IS NULL`,
+        [telegramId]
+    );
+}
+
+// Статистика для админ-панели
 async function getStats() {
     const totalRes = await pool.query(
         'SELECT COUNT(*)::int AS count FROM users'
@@ -51,33 +71,47 @@ async function getStats() {
     const todayRes = await pool.query(`
         SELECT COUNT(*)::int AS count
         FROM users
-        WHERE created_at >= NOW() - INTERVAL '24 hours'
+        WHERE created_at >= date_trunc('day', now())
     `);
 
-    const weekRes = await pool.query(`
+    const openedRes = await pool.query(`
         SELECT COUNT(*)::int AS count
         FROM users
-        WHERE created_at >= NOW() - INTERVAL '7 days'
+        WHERE opened_materials_at IS NOT NULL
     `);
 
-    const bySourceRes = await pool.query(`
-        SELECT COALESCE(source, 'direct') AS source, COUNT(*)::int AS count
+    const subscribedRes = await pool.query(`
+        SELECT COUNT(*)::int AS count
         FROM users
-        GROUP BY source
-        ORDER BY count DESC
+        WHERE subscribed_at IS NOT NULL
     `);
+
+    const total = totalRes.rows[0].count;
+    const subscribed = subscribedRes.rows[0].count;
 
     return {
-        total: totalRes.rows[0].count,
-        last24h: todayRes.rows[0].count,
-        last7d: weekRes.rows[0].count,
-        bySource: bySourceRes.rows,
+        total,
+        today: todayRes.rows[0].count,
+        openedMaterials: openedRes.rows[0].count,
+        subscribed,
+        conversion: total > 0 ? (subscribed / total) * 100 : 0,
     };
+}
+
+async function getAllUserIds() {
+    const { rows } = await pool.query(
+        'SELECT telegram_id FROM users'
+    );
+
+    return rows.map((row) => row.telegram_id);
 }
 
 module.exports = {
     findUserByTelegramId,
     createUser,
     registerUser,
+    markMaterialsOpened,
+    markSubscribed,
     getStats,
+    getAllUserIds,
 };
