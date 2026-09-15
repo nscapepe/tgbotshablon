@@ -1,7 +1,7 @@
 const { Markup } = require('telegraf');
 
 const { isAdmin } = require('../config');
-const { getStats, getAllUserIds } = require('../db/users');
+const { getStats, getSourceStats, getAllUserIds } = require('../db/users');
 const {
     getMaterialStats,
     getAllMaterials,
@@ -34,6 +34,7 @@ function getAdminMenu() {
     return Markup.inlineKeyboard([
         [Markup.button.callback('📊 Статистика', 'admin:stats')],
         [Markup.button.callback('📦 Материалы', 'admin:materials')],
+        [Markup.button.callback('🔗 Deep Links', 'admin:deeplinks')],
         [Markup.button.callback('📢 Рассылка', 'admin:broadcast')],
     ]);
 }
@@ -98,17 +99,19 @@ function formatMaterialsMenu(materials) {
     return text.trim();
 }
 
-function parseParts(text, expectedCount) {
-    const parts = (text || '')
-        .split('|')
-        .map((part) => part.trim())
-        .filter(Boolean);
+function formatSourceStats(rows) {
+    let text = '🔗 Deep Links\n\n';
 
-    if (parts.length !== expectedCount) {
-        return null;
+    if (rows.length === 0) {
+        text += 'Пока нет данных.';
+        return text;
     }
 
-    return parts;
+    rows.forEach((row) => {
+        text += `• ${row.source}: ${row.count}\n`;
+    });
+
+    return text.trim();
 }
 
 function isValidUrl(url) {
@@ -165,6 +168,29 @@ function adminStatsActionHandler() {
     };
 }
 
+// ---------- Deep Links ----------
+
+function adminDeepLinksActionHandler() {
+    return async (ctx) => {
+        try {
+            if (!isAdmin(ctx.from.id)) {
+                await ctx.answerCbQuery();
+                return;
+            }
+
+            await ctx.answerCbQuery();
+
+            const rows = await getSourceStats();
+            await ctx.editMessageText(
+                formatSourceStats(rows),
+                getBackMenu()
+            );
+        } catch (error) {
+            console.error('ADMIN DEEP LINKS ERROR:', error);
+        }
+    };
+}
+
 // ---------- Материалы: меню ----------
 
 function adminMaterialsActionHandler() {
@@ -205,9 +231,11 @@ function adminMaterialAddActionHandler() {
         await ctx.editMessageText(
             '➕ Новый материал\n\n' +
             'Пришли одним сообщением через вертикальную черту:\n' +
-            'ключ | эмодзи | название | ссылка\n\n' +
+            'ключ | название | ссылка\n\n' +
             'Например:\n' +
-            'presets | 🎬 | Пресеты | https://disk.yandex.ru/d/xxxxx\n\n' +
+            'presets | Пресеты | https://disk.yandex.ru/d/xxxxx\n\n' +
+            'Эмодзи необязателен — если хочешь его задать, добавь последним пунктом:\n' +
+            'presets | Пресеты | https://disk.yandex.ru/d/xxxxx | 🎬\n\n' +
             'Ключ — короткое слово латиницей, без пробелов и двоеточий, для внутреннего использования.',
             getCancelMenu('admin:material_cancel')
         );
@@ -280,9 +308,12 @@ function adminMaterialEditPickActionHandler() {
             await ctx.editMessageText(
                 `✏️ Изменение: ${material.emoji} ${material.label}\n\n` +
                 'Пришли новые данные через вертикальную черту:\n' +
-                'эмодзи | название | ссылка\n\n' +
+                'название | ссылка\n\n' +
                 'Например:\n' +
-                `${material.emoji} | ${material.label} | ${material.url}`,
+                `${material.label} | ${material.url}\n\n` +
+                'Эмодзи необязателен — если хочешь поменять, добавь его последним пунктом:\n' +
+                `${material.label} | ${material.url} | ${material.emoji}\n\n` +
+                'Если эмодзи не укажешь — оставлю текущий.',
                 getCancelMenu('admin:material_cancel')
             );
         } catch (error) {
@@ -427,17 +458,22 @@ function adminMaterialCancelActionHandler() {
 // ---------- Обработка текстовых сообщений в режиме add/edit ----------
 
 async function handleMaterialAddMessage(ctx) {
-    const parts = parseParts(ctx.message.text, 4);
+    const parts = (ctx.message.text || '')
+        .split('|')
+        .map((part) => part.trim())
+        .filter(Boolean);
 
-    if (!parts) {
+    if (parts.length !== 3 && parts.length !== 4) {
         await ctx.reply(
             'Не понял формат. Пришли так:\n' +
-            'ключ | эмодзи | название | ссылка'
+            'ключ | название | ссылка\n\n' +
+            'Эмодзи необязателен, если хочешь — добавь его последним:\n' +
+            'ключ | название | ссылка | эмодзи'
         );
         return;
     }
 
-    const [key, emoji, label, url] = parts;
+    const [key, label, url, emoji = '📁'] = parts;
 
     if (key.includes(':') || /\s/.test(key)) {
         await ctx.reply(
@@ -471,17 +507,22 @@ async function handleMaterialAddMessage(ctx) {
 }
 
 async function handleMaterialEditMessage(ctx, key) {
-    const parts = parseParts(ctx.message.text, 3);
+    const parts = (ctx.message.text || '')
+        .split('|')
+        .map((part) => part.trim())
+        .filter(Boolean);
 
-    if (!parts) {
+    if (parts.length !== 2 && parts.length !== 3) {
         await ctx.reply(
             'Не понял формат. Пришли так:\n' +
-            'эмодзи | название | ссылка'
+            'название | ссылка\n\n' +
+            'Эмодзи необязателен, если хочешь поменять — добавь его последним:\n' +
+            'название | ссылка | эмодзи'
         );
         return;
     }
 
-    const [emoji, label, url] = parts;
+    const [label, url, emoji] = parts;
 
     if (!isValidUrl(url)) {
         await ctx.reply(
@@ -490,8 +531,19 @@ async function handleMaterialEditMessage(ctx, key) {
         return;
     }
 
+    const existing = await getMaterialByKey(key);
+    if (!existing) {
+        materialFlow.delete(ctx.from.id);
+        await ctx.reply('Этот материал уже не найден — возможно, его удалили.');
+        return;
+    }
+
     materialFlow.delete(ctx.from.id);
-    await updateMaterial(key, { emoji, label, url });
+    await updateMaterial(key, {
+        emoji: emoji || existing.emoji,
+        label,
+        url,
+    });
 
     await ctx.reply('Материал обновлён ✅');
 
@@ -617,6 +669,7 @@ module.exports = {
     adminCommandHandler,
     adminMenuActionHandler,
     adminStatsActionHandler,
+    adminDeepLinksActionHandler,
     adminMaterialsActionHandler,
     adminMaterialAddActionHandler,
     adminMaterialEditActionHandler,

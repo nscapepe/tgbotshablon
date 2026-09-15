@@ -3,7 +3,7 @@ const path = require('path')
 
 const CONTENT = require('../content')
 const { registerUser } = require('../db/users')
-const { TELEGRAM_URL, COOPERATION_URL } = require('../config')
+const { CHANNEL_URL, COOPERATION_URL } = require('../config')
 
 function getMainMenu() {
     return Markup.inlineKeyboard([
@@ -16,7 +16,7 @@ function getMainMenu() {
         [
             Markup.button.url(
                 'Telegram',
-                TELEGRAM_URL
+                CHANNEL_URL
             ),
             Markup.button.url(
                 'Сотрудничество',

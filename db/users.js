@@ -98,6 +98,17 @@ async function getStats() {
     };
 }
 
+async function getSourceStats() {
+    const { rows } = await pool.query(`
+        SELECT COALESCE(source, 'direct') AS source, COUNT(*)::int AS count
+        FROM users
+        GROUP BY source
+        ORDER BY count DESC
+    `);
+
+    return rows;
+}
+
 async function getAllUserIds() {
     const { rows } = await pool.query(
         'SELECT telegram_id FROM users'
@@ -113,5 +124,6 @@ module.exports = {
     markMaterialsOpened,
     markSubscribed,
     getStats,
+    getSourceStats,
     getAllUserIds,
 };

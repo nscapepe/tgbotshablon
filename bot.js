@@ -18,6 +18,7 @@ const {
     adminCommandHandler,
     adminMenuActionHandler,
     adminStatsActionHandler,
+    adminDeepLinksActionHandler,
     adminMaterialsActionHandler,
     adminMaterialAddActionHandler,
     adminMaterialEditActionHandler,
@@ -47,6 +48,11 @@ bot.action(
 bot.action(
     'admin:stats',
     adminStatsActionHandler()
+);
+
+bot.action(
+    'admin:deeplinks',
+    adminDeepLinksActionHandler()
 );
 
 bot.action(
