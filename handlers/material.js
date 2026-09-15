@@ -73,11 +73,17 @@ async function isSubscribed(bot, userId) {
 
 
 async function showSubscriptionMessage(ctx, materialKey) {
-    await ctx.editMessageCaption(
+    const message = ctx.callbackQuery.message;
+    const text =
         'Почти готово\n\n' +
-        'Материалы доступны подписчикам моего Telegram-канала',
-        getSubscriptionMenu(materialKey)
-    );
+        'Материалы доступны подписчикам моего Telegram-канала';
+    const keyboard = getSubscriptionMenu(materialKey);
+
+    if (message.photo) {
+        await ctx.editMessageCaption(text, keyboard);
+    } else {
+        await ctx.editMessageText(text, keyboard);
+    }
 }
 
 async function sendMaterial(ctx, materialKey) {
@@ -115,47 +121,6 @@ async function sendMaterial(ctx, materialKey) {
         'Выбери, что дальше:',
         getAfterDownloadMenu()
     );
-}
-
-async function materialHandler(bot) {
-    return async (ctx) => {
-        try {
-            await ctx.answerCbQuery();
-
-            const materialKey =
-                ctx.callbackQuery.data.split(':')[1];
-
-            const material =
-                CONTENT.materials[materialKey];
-
-            if (!material) {
-                await ctx.answerCbQuery('Материал не найден');
-                return;
-            }
-
-            const subscribed =
-                await isSubscribed(bot, ctx.from.id);
-
-            if (!subscribed) {
-                await showSubscriptionMessage(
-                    ctx,
-                    materialKey
-                );
-                return;
-            }
-
-            await sendMaterial(
-                ctx,
-                materialKey
-            );
-
-        } catch (error) {
-            console.error(
-                'MATERIAL ERROR:',
-                error
-            );
-        }
-    };
 }
 
 function materialHandler(bot) {
@@ -243,11 +208,17 @@ function checkSubscriptionHandler(bot) {
                     'Пока не вижу подписку 👀'
                 );
 
-                await ctx.editMessageCaption(
+                const message = ctx.callbackQuery.message;
+                const text =
                     'пока не вижу подписку 👀\n\n' +
-                    'подпишись и нажми «Проверить» ещё раз',
-                    getSubscriptionMenu(materialKey)
-                );
+                    'подпишись и нажми «Проверить» ещё раз';
+                const keyboard = getSubscriptionMenu(materialKey);
+
+                if (message.photo) {
+                    await ctx.editMessageCaption(text, keyboard);
+                } else {
+                    await ctx.editMessageText(text, keyboard);
+                }
 
                 return;
             }
